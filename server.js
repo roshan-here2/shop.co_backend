@@ -1,19 +1,21 @@
 
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const path = require('path');
 
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
-
-dotenv.config();
 
 const app = express();
 
 // =====================================
 // CORS CONFIGURATION
 // =====================================
+
+const normalizeOrigin = (url = '') =>
+  url.trim().replace(/\/+$/, '');
 
 const allowedOrigins = [
   'https://shopco-ten-umber.vercel.app',
@@ -22,14 +24,17 @@ const allowedOrigins = [
   'http://localhost:5174',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
+
   ...(process.env.CLIENT_URL || '').split(','),
   ...(process.env.ADMIN_URL || '').split(','),
   ...(process.env.CORS_ORIGINS || '').split(',')
-].map(url => url.trim().replace(/\/+$/, '')).filter(Boolean);
+]
+  .map(normalizeOrigin)
+  .filter(Boolean);
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin.replace(/\/+$/, ''))) {
+    if (!origin || allowedOrigins.includes(normalizeOrigin(origin))) {
       return callback(null, true);
     }
 
@@ -59,8 +64,8 @@ const corsOptions = {
 };
 
 // CORS FIRST
+// This also handles OPTIONS preflight requests.
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
 
 // =====================================
 // BODY PARSERS
@@ -73,9 +78,10 @@ app.use(express.urlencoded({ extended: true }));
 // STATIC FILES
 // =====================================
 
-app.use('/uploads', express.static(
-  path.join(__dirname, 'uploads')
-));
+app.use(
+  '/uploads',
+  express.static(path.join(__dirname, 'uploads'))
+);
 
 // =====================================
 // HEALTH CHECK
@@ -91,7 +97,7 @@ app.get('/api/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'server is running'
+    message: 'Server is running'
   });
 });
 
@@ -101,7 +107,7 @@ app.get('/', (req, res) => {
 
 let dbConnectionPromise;
 
-app.use(async (req, res, next) => {
+app.use('/api', async (req, res, next) => {
   try {
     if (!dbConnectionPromise) {
       dbConnectionPromise = connectDB().catch(error => {
@@ -114,6 +120,7 @@ app.use(async (req, res, next) => {
     next();
 
   } catch (error) {
+    console.error('Database middleware error:', error.message);
     next(error);
   }
 });
